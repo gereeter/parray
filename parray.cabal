@@ -1,0 +1,12 @@
+Name:          parray
+Version:       0.1
+Description:   A pure Haskell implementation of DPH
+Author:        Jonathan S
+Build-Type:    Simple
+Cabal-Version: >=1.8
+
+library
+    HS-Source-Dirs:  src
+    Build-Depends:   base, containers, vector, primitive
+    Exposed-modules: Data.Array.PArray
+    ghc-options:     -Wall
