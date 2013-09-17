@@ -8,5 +8,5 @@ Cabal-Version: >=1.8
 library
     HS-Source-Dirs:  src
     Build-Depends:   base, containers, vector, primitive
-    Exposed-modules: Data.Array.PArray
+    Exposed-modules: Data.Array.PRepr.Class, Data.Array.PRepr.Tuple, Data.Array.PRepr.Nested, Data.Array.PRepr.Closure, Data.Array.PRepr.Primitive
     ghc-options:     -Wall
