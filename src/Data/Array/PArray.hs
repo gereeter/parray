@@ -111,6 +111,18 @@ instance Scalar () where
     unsafeWriteMPData _ _ _ = return ()
     unsafeFreezeMPData_ _ = return ()
 
+newtype Id a = Id {unId :: a}
+
+instance PR a => PR (Id a) where
+    type PData_ (Id a) = Id (PData a)
+    unsafeDropPData n (PData (Id dat)) = PData (Id (unsafeDropPData n dat))
+    unsafeIndexPData (PData (Id dat)) i = Id (unsafeIndexPData dat i)
+    unsafeReplicatePData n (Id a) = PData (Id (unsafeReplicatePData n a))
+    concatPData vsegs (PData (PData (Id dat))) = PData (Id (concatPData vsegs dat))
+    liftedInstance = change liftedInstance where
+        change :: PRDict (PData a) -> PRDict (PData (Id a))
+        change PRDict = PRDict
+
 instance (PR a, PR b) => PR (a, b) where
     type PData_ (a, b) = (PData a, PData b)
     unsafeDropPData n (PData (as, bs)) = PData (unsafeDropPData n as, unsafeDropPData n bs)
@@ -190,18 +202,6 @@ instance PR (Clo_ f a b) where
     concatPData vsegs (PData (PData (Clo_ (WithPData (PData (WithPData dat))) fS fL))) = PData (Clo_ (WithPData (concatPData vsegs dat)) fS fL)
     liftedInstance = PRDict
 
-newtype Id a = Id {unId :: a}
-
-instance PR a => PR (Id a) where
-    type PData_ (Id a) = PData a
-    unsafeDropPData n (PData dat) = PData (unsafeDropPData n dat)
-    unsafeIndexPData (PData dat) i = Id (unsafeIndexPData dat i)
-    unsafeReplicatePData n (Id a) = PData (unsafeReplicatePData n a)
-    concatPData vsegs (PData (PData dat)) = PData (concatPData vsegs (PData dat))
-    liftedInstance = change liftedInstance where
-        change :: PRDict (PData a) -> PRDict (PData (Id a))
-        change PRDict = PRDict
-
 type (:->) = Clo_ Id
 infixr :->
 
@@ -215,19 +215,19 @@ closure1 :: (a -> b) -> (Int -> PData a -> PData b) -> (a :-> b)
 closure1 fS fL = Clo_ (Id ()) (const fS) (\s -> const (fL s))
 
 closure2 :: (PR a) => (a -> b -> c) -> (Int -> PData a -> PData b -> PData c) -> (a :-> b :-> c)
-closure2 fS fL = closure1 (\a -> Clo_ (Id a) fS fL) (\_ as -> PData $ clo_ PRDict (change PRDict liftedInstance) (WithPData (PData as)) fS fL) where
+closure2 fS fL = closure1 (\a -> Clo_ (Id a) fS fL) (\_ as -> PData $ clo_ PRDict (change PRDict liftedInstance) (WithPData (PData (Id as))) fS fL) where
     change :: PRDict x -> PRDict (PData x) -> PRDict (WithPData Id x)
     change PRDict PRDict = PRDict
 
 closure3 :: (PR a, PR b) => (a -> b -> c -> d) -> (Int -> PData a -> PData b -> PData c -> PData d) -> (a :-> b :-> c :-> d)
-closure3 fS fL = closure2 (\a b -> Clo_ (Id (a, b)) fS' fL') (\_ as bs -> PData $ clo_ PRDict (change PRDict liftedInstance) (WithPData (PData (PData (as, bs)))) fS' fL') where
+closure3 fS fL = closure2 (\a b -> Clo_ (Id (a, b)) fS' fL') (\_ as bs -> PData $ clo_ PRDict (change PRDict liftedInstance) (WithPData (PData (Id (PData (as, bs))))) fS' fL') where
     fS' (a, b) = fS a b
     fL' s (PData (as, bs)) = fL s as bs
     change :: PRDict x -> PRDict (PData x) -> PRDict (WithPData Id x)
     change PRDict PRDict = PRDict
 
 closure4 :: (PR a, PR b, PR c) => (a -> b -> c -> d -> e) -> (Int -> PData a -> PData b -> PData c -> PData d -> PData e) -> (a :-> b :-> c :-> d :-> e)
-closure4 fS fL = closure3 (\a b c -> Clo_ (Id (a, b, c)) fS' fL') (\_ as bs cs -> PData $ clo_ PRDict (change PRDict liftedInstance) (WithPData (PData (PData (as, bs, cs)))) fS' fL') where
+closure4 fS fL = closure3 (\a b c -> Clo_ (Id (a, b, c)) fS' fL') (\_ as bs cs -> PData $ clo_ PRDict (change PRDict liftedInstance) (WithPData (PData (Id (PData (as, bs, cs))))) fS' fL') where
     fS' (a, b, c) = fS a b c
     fL' s (PData (as, bs, cs)) = fL s as bs cs
     change :: PRDict x -> PRDict (PData x) -> PRDict (WithPData Id x)
@@ -246,7 +246,7 @@ usePData :: Int -> UseFunc PData
 usePData = unsafeReplicatePData
 
 apPData :: Int -> ApFunc PData
-apPData s (PData (Clo_ (WithPData (PData es)) _ fL)) xs = fL s es xs
+apPData s (PData (Clo_ (WithPData (PData (Id es))) _ fL)) xs = fL s es xs
 
 vectorize1 :: (forall f . UseFunc f -> ApFunc f -> f a -> f b) -> (a :-> b)
 vectorize1 f = closure1 fS fL where
@@ -273,6 +273,6 @@ vectorize4 f = closure4 fS fL where
 apP :: PArray (a :-> b) :-> PArray a :-> PArray b
 apP = closure2 apS apL where
     apS :: PArray (a :-> b) -> PArray a -> PArray b
-    apS (PArray sF (PData (Clo_ (WithPData (PData es)) _ fL))) (PArray sA as) = PArray s' (fL s' es as) where
+    apS (PArray sF (PData (Clo_ (WithPData (PData (Id es))) _ fL))) (PArray sA as) = PArray s' (fL s' es as) where
         s' = min sF sA
     apL = undefined -- TODO: implement
